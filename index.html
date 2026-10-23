@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>資訊二部架構島 - 3D 基礎架構微縮模型</title>
+  
+  <style>
+    :root {
+      --bg-cream: #fbf8f3;
+      --ink: #211d1d;
+      --ink-soft: #544e4d;
+      --card-bg: rgba(255, 253, 249, 0.94);
+      --coral: #db6a41;
+      --tech-blue: #3eaec4;
+      --neon-green: #2ec971;
+      --stone: #c5b5a7;
+      --border-color: rgba(60, 50, 40, 0.12);
+      --shadow-soft: 0 12px 36px rgba(45, 35, 25, 0.12), 0 3px 8px rgba(45, 35, 25, 0.06);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%; overflow: hidden;
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      background: radial-gradient(circle at 50% 35%, #fffdf9 0%, #ecdacf 100%);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #webgl-canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 1; outline: none; display: block;
+    }
+    #css2d-container {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 2; pointer-events: none; overflow: hidden;
+    }
+
+    /* UI 根佈局 */
+    #ui-root {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 10; pointer-events: none;
+      display: grid;
+      grid-template-columns: 380px 1fr 340px;
+      grid-template-rows: auto 1fr auto;
+      padding: 20px;
+      gap: 16px;
+    }
+
+    .interactive { pointer-events: auto; }
+
+    /* 左上標題卡 */
+    .brand-card {
+      grid-column: 1; grid-row: 1;
+      background: var(--card-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 18px 22px;
+      box-shadow: var(--shadow-soft);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .brand-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+      color: var(--coral); text-transform: uppercase;
+    }
+    .brand-badge::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--coral);
+    }
+    .brand-title {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+      color: var(--ink); display: flex; align-items: center; justify-content: space-between;
+    }
+    .brand-subtitle { font-size: 13px; color: var(--ink-soft); }
+
+    /* 左側詳情卡片 */
+    .detail-card {
+      grid-column: 1; grid-row: 2;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: var(--shadow-soft);
+      display: flex; flex-direction: column; gap: 14px;
+      max-height: 520px; overflow-y: auto;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .detail-card.hidden { opacity: 0; transform: translateY(12px); pointer-events: none; }
+    .card-header-tag {
+      font-size: 12px; font-weight: 700; color: var(--tech-blue);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .close-btn {
+      cursor: pointer; width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.05); font-size: 14px;
+    }
+    .close-btn:hover { background: rgba(0,0,0,0.12); }
+    .card-title { font-size: 20px; font-weight: 800; line-height: 1.3; }
+    .card-desc { font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); }
+    .metric-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px;
+    }
+    .metric-box {
+      background: rgba(255,255,255,0.75); border: 1px solid var(--border-color);
+      border-radius: 12px; padding: 10px 8px; text-align: center;
+    }
+    .metric-val { font-size: 15px; font-weight: 800; color: var(--tech-blue); }
+    .metric-lbl { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+
+    /* 右側搜尋與導覽側欄 */
+    .sidebar-card {
+      grid-column: 3; grid-row: 1 / span 2;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: var(--shadow-soft);
+      display: flex; flex-direction: column; gap: 12px;
+      height: fit-content; max-height: calc(100vh - 120px);
+    }
+    .search-box {
+      width: 100%; border: 1px solid var(--border-color);
+      background: rgba(255,255,255,0.85); border-radius: 12px;
+      padding: 9px 12px; font-size: 13px; color: var(--ink);
+      outline: none; transition: border-color 0.2s;
+    }
+    .search-box:focus { border-color: var(--tech-blue); }
+    .tab-bar {
+      display: flex; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;
+      gap: 12px;
+    }
+    .tab-btn {
+      background: none; border: none; font-size: 13px; font-weight: 700;
+      color: var(--ink-soft); cursor: pointer; padding: 4px 6px; position: relative;
+    }
+    .tab-btn.active { color: var(--tech-blue); }
+    .tab-btn.active::after {
+      content: ''; position: absolute; bottom: -7px; left: 0; width: 100%;
+      height: 2px; background: var(--tech-blue); border-radius: 2px;
+    }
+    .nav-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+    .nav-island-details {
+      background: rgba(255,255,255,0.6); border: 1px solid var(--border-color);
+      border-radius: 12px; overflow: hidden; font-size: 13px;
+    }
+    .nav-island-summary {
+      padding: 10px 12px; font-weight: 700; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .nav-subnode {
+      padding: 7px 12px 7px 24px; font-size: 12.5px; color: var(--ink-soft);
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid rgba(0,0,0,0.04);
+    }
+    .nav-subnode:hover { background: rgba(62,174,196,0.1); color: var(--tech-blue); }
+
+    /* 右上日誌面板 */
+    .log-panel {
+      grid-column: 2; grid-row: 1; justify-self: center;
+      background: rgba(25, 23, 23, 0.88);
+      color: #e5f4f8; backdrop-filter: blur(12px);
+      border-radius: 30px; padding: 6px 18px;
+      font-size: 12px; font-family: monospace;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--neon-green);
+      box-shadow: 0 0 8px var(--neon-green);
+      animation: pulse-dot 1.5s infinite;
+    }
+    @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+    /* 底部 HUD 工具列 */
+    .bottom-hud {
+      grid-column: 1 / span 3; grid-row: 3;
+      justify-self: center; display: flex; gap: 14px;
+      align-items: center;
+      background: var(--card-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 40px; padding: 8px 16px;
+      box-shadow: var(--shadow-soft);
+    }
+    .time-btn-group, .toggle-group { display: flex; gap: 4px; align-items: center; }
+    .hud-btn {
+      background: rgba(255,255,255,0.7); border: 1px solid var(--border-color);
+      border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700;
+      color: var(--ink); cursor: pointer; transition: all 0.2s;
+    }
+    .hud-btn:hover { background: #fff; border-color: var(--tech-blue); }
+    .hud-btn.active {
+      background: var(--tech-blue); color: #fff; border-color: var(--tech-blue);
+    }
+    .hud-divider { width: 1px; height: 20px; background: var(--border-color); margin: 0 4px; }
+
+    /* CSS2D 3D 標籤樣式 */
+    .island-badge {
+      background: var(--card-bg); border: 1.5px solid var(--tech-blue);
+      border-radius: 14px; padding: 4px 10px; font-size: 11px; font-weight: 800;
+      color: var(--ink); box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      white-space: nowrap; transform: translate(-50%, -50%);
+      transition: all 0.2s; pointer-events: auto; cursor: pointer;
+    }
+    .island-badge.selected {
+      background: var(--ink); color: #fff; border-color: var(--ink);
+    }
+    .chat-bubble {
+      background: rgba(20, 25, 30, 0.85); color: #fff;
+      border-radius: 10px; padding: 4px 8px; font-size: 10.5px;
+      white-space: nowrap; transform: translate(-50%, -120%);
+      pointer-events: none; border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    /* 載入與錯誤遮罩 */
+    #loader-overlay {
+      position: absolute; top:0; left:0; width:100%; height:100%;
+      background: #fbf8f3; z-index: 999; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      transition: opacity 0.5s ease;
+    }
+    .loader-spinner {
+      width: 44px; height: 44px; border: 4px solid rgba(219,106,65,0.2);
+      border-top-color: var(--coral); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 900px) {
+      #ui-root {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto 1fr;
+      }
+      .sidebar-card { display: none; }
+      .detail-card { max-height: 280px; }
+      .bottom-hud { flex-wrap: wrap; justify-content: center; border-radius: 20px; }
+    }
+  </style>
+
+  <script>
+    // 捕捉未預期錯誤，避免轉圈圈無法排查
+    window.addEventListener('error', function(e) {
+      var msgEl = document.getElementById('loader-msg');
+      if (msgEl) {
+        msgEl.innerHTML = '<span style="color:#d9534f;font-weight:bold;">載入錯誤: ' + (e.message || '資源載入失敗') + '</span>';
+      }
+    });
+  </script>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="loader-overlay">
+    <div class="loader-spinner"></div>
+    <div id="loader-msg" style="font-weight:700; color:var(--ink-soft); font-size:14px;">正在建造資訊二部架構島...</div>
+  </div>
+
+  <canvas id="webgl-canvas"></canvas>
+  <div id="css2d-container"></div>
+
+  <div id="ui-root">
+    <div class="brand-card interactive">
+      <div class="brand-badge">IT Infrastructure 3D Demo</div>
+      <div class="brand-title">資訊二部架構島</div>
+      <div class="brand-subtitle">企業級核心 IT 基礎設施與微服務拓撲示範</div>
+    </div>
+
+    <div id="detail-card" class="detail-card interactive hidden">
+      <div class="card-header-tag">
+        <span id="detail-type-tag">架構群組</span>
+        <div class="close-btn" id="card-close-btn">&times;</div>
+      </div>
+      <div class="card-title" id="detail-title">系統節點名稱</div>
+      <div class="card-desc" id="detail-desc">功能與定位說明。</div>
+      <div class="metric-grid" id="detail-metrics"></div>
+    </div>
+
+    <div class="log-panel interactive">
+      <div class="live-dot"></div>
+      <span id="log-text">EVENT: [核心主機] 批次資料傳輸完成 (ACK 200 OK)</span>
+    </div>
+
+    <div class="sidebar-card interactive">
+      <input type="text" class="search-box" id="search-input" placeholder="搜尋系統、資料庫或流程..." />
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-islands-btn">主題島嶼</button>
+        <button class="tab-btn" id="tab-flows-btn">資料流向</button>
+      </div>
+      <div class="nav-list" id="nav-list-content"></div>
+    </div>
+
+    <div class="bottom-hud interactive">
+      <div class="time-btn-group">
+        <button class="hud-btn" data-time="120">02 離峰</button>
+        <button class="hud-btn active" data-time="540">09 早會</button>
+        <button class="hud-btn" data-time="840">14 尖峰</button>
+        <button class="hud-btn" data-time="1320">22 維護</button>
+      </div>
+      <div class="hud-divider"></div>
+      <div class="toggle-group">
+        <button class="hud-btn active" id="btn-toggle-flow">資料流</button>
+        <button class="hud-btn active" id="btn-toggle-badges">名牌</button>
+        <button class="hud-btn" id="btn-toggle-birds">鳥瞰</button>
+        <button class="hud-btn" id="btn-reset-cam">全景</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+    import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+    function initApp() {
+      /* 固定種子亂數 */
+      function mulberry32(a) {
+        return function() {
+          var t = a += 0x6D2B79F5;
+          t = Math.imul(t ^ t >>> 15, t | 1);
+          t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+          return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+      }
+      const rng = mulberry32(20250330);
+
+      /* 資料架構設定 */
+      const DATA = {
+        islands: [
+          {
+            id: "core", name: "核心主機叢集", code: "01", q: 0, r: 0,
+            desc: "負責全行帳務核心與高併發結算，具備雙活容災機制。",
+            nodes: [
+              { id: "core_main", name: "交易主機 A 軌", model: "mainframe", desc: "專屬高效能主機，處理全天候核心交易記帳。", metrics: [{label:"Uptime", val:"99.999%"}, {label:"TPS", val:"12,500"}, {label:"延遲", val:"1.2ms"}], status: "營運中" },
+              { id: "core_backup", name: "容災主機 B 軌", model: "mainframe", desc: "即時熱備份主機，跨機房同步交易紀錄。", metrics: [{label:"同步延遲", val:"0.1ms"}, {label:"備援狀態", val:"Standby"}, {label:"容錯率", val:"100%"}], status: "營運中" },
+              { id: "core_mq", name: "核心訊息匯流排", model: "api_kiosk", desc: "低延遲記憶體訊息管道，解耦交易與周邊系統。", metrics: [{label:"佇列負載", val:"14%"}, {label:"緩衝容量", val:"20 GB"}, {label:"丟包率", val:"0.00%"}], status: "營運中" },
+              { id: "core_batch", name: "夜間批次引擎", model: "server", desc: "排程運算結算利息、報表與稽核底冊匯出。", metrics: [{label:"批次窗口", val:"2.4hr"}, {label:"處理筆數", val:"4.2M"}, {label:"記憶體", val:"512GB"}], status: "營運中" }
+            ]
+          },
+          {
+            id: "servers", name: "虛擬化與伺服器", code: "02", q: 1, r: -1,
+            desc: "承載內部微服務、身分驗證與基礎運算叢集。",
+            nodes: [
+              { id: "srv_k8s_master", name: "K8s 控制平面", model: "server", desc: "容器叢集調度核心，管理 800+ 容器 Pod 部署。", metrics: [{label:"節點數", val:"64"}, {label:"Pod 數", val:"820"}, {label:"健康度", val:"100%"}], status: "營運中" },
+              { id: "srv_iam", name: "統一身分驗證 (IAM)", model: "api_kiosk", desc: "提供 SSO 單一登入、OAuth2 與多因子驗證 (MFA)。", metrics: [{label:"認證 QPS", val:"3,400"}, {label:"SLA", val:"99.99%"}, {label:"Session", val:"45k"}], status: "營運中" },
+              { id: "srv_edge", name: "反向代理閘道", model: "api_kiosk", desc: "邊緣負載平衡與 SSL 終端加速器。", metrics: [{label:"頻寬", val:"1.8 Gbps"}, {label:"WAF阻擋", val:"99.8%"}, {label:"HTTP/3", val:"已啟用"}], status: "營運中" },
+              { id: "srv_storage", name: "分散式檔案系統", model: "database", desc: "儲存帳單、簽章影像與冷熱分層資料快照。", metrics: [{label:"總容量", val:"450 TB"}, {label:"IOPS", val:"85k"}, {label:"副本數", val:"3"}], status: "營運中" }
+            ]
+          },
+          {
+            id: "db", name: "資料庫引擎庫", code: "03", q: 1, r: 0,
+            desc: "關聯式、分散式與記憶體快取的多階資料底層。",
+            nodes: [
+              { id: "db_relational", name: "關聯式資料庫主庫", model: "database", desc: "高可用性關聯式交易資料庫，支援 ACID。", metrics: [{label:"連線數", val:"1,200"}, {label:"快取命中", val:"98.2%"}, {label:"TPS", val:"8,200"}], status: "營運中" },
+              { id: "db_cache", name: "分散式快取 (Redis)", model: "database", desc: "儲存高頻頻寬查詢、臨時 Token 與排行榜快取。", metrics: [{label:"命中率", val:"99.4%"}, {label:"延遲", val:"0.4ms"}, {label:"記憶體", val:"128GB"}], status: "營運中" },
+              { id: "db_analytics", name: "巨量資料分析倉儲", model: "database", desc: "提供跨系統報表、BI 儀表板與即時風控分析。", metrics: [{label:"總資料量", val:"1.2 PB"}, {label:"查詢秒數", val:"4.1s"}, {label:"日增量", val:"800GB"}], status: "營運中" },
+              { id: "db_arch", name: "冷資料封存中心", model: "mainframe", desc: "符合法規遵循的唯讀長期不可竄改儲存。", metrics: [{label:"保留年限", val:"7 年"}, {label:"壓縮比", val:"4.2:1"}, {label:"完整性", val:"100%"}], status: "營運中" }
+            ]
+          },
+          {
+            id: "services", name: "資訊服務與 API", code: "04", q: 0, r: 1,
+            desc: "對外開放 API 與對內業務中台服務層。",
+            nodes: [
+              { id: "svc_open_api", name: "開放金融 API", model: "api_kiosk", desc: "合規標準開放 API，供第三方合作夥伴介接。", metrics: [{label:"日呼叫", val:"8.4M"}, {label:"成功率", val:"99.98%"}, {label:"簽章驗證", val:"即時"}], status: "營運中" },
+              { id: "svc_notification", name: "全通路推播中心", model: "api_kiosk", desc: "支援簡訊、App Push、LINE 與 Email 即時發送。", metrics: [{label:"發送佇列", val:"210/s"}, {label:"到達率", val:"99.9%"}, {label:"通道數", val:"6"}], status: "營運中" },
+              { id: "svc_payment", name: "即時支付清算服務", model: "server", desc: "串聯電支、QR Code 與轉帳之核心業務中台。", metrics: [{label:"峰值 TPS", val:"4,500"}, {label:"風控攔阻", val:"0.02%"}, {label:"可用度", val:"99.995%"}], status: "營運中" },
+              { id: "svc_crm", name: "客戶資訊整流服務", model: "devops_conveyor", desc: "提供單一客群全視圖之即時聚合查詢服務。", metrics: [{label:"查詢量", val:"1,800/s"}, {label:"聚合耗時", val:"18ms"}, {label:"快取層", val:"雙層"}], status: "營運中" }
+            ]
+          },
+          {
+            id: "cloud", name: "混合雲端架構", code: "05", q: -1, r: 1,
+            desc: "彈性擴充彈性運算資源與 AI 大模型推論叢集。",
+            nodes: [
+              { id: "cld_ai_cluster", name: "AI 智庫推論節點", model: "cloud_node", desc: "部署企業專屬 LLM，提供智慧客服與代碼審查。", metrics: [{label:"GPU 利用率", val:"78%"}, {label:"Token/s", val:"1,420"}, {label:"模型版本", val:"v4.2"}], status: "營運中" },
+              { id: "cld_auto_scale", name: "彈性伸縮伺服器群", model: "cloud_node", desc: "尖峰流量自動水平擴增虛擬實例，隨需收縮。", metrics: [{label:"擴容耗時", val:"45s"}, {label:"當前實例", val:"24"}, {label:"成本優化", val:"32%"}], status: "營運中" },
+              { id: "cld_vpn_gw", name: "專線混合互聯閘道", model: "api_kiosk", desc: "雙活硬體加密專線，串接公有雲與地端資料中心。", metrics: [{label:"專線頻寬", val:"10 Gbps"}, {label:"雙向延遲", val:"3.4ms"}, {label:"IPsec", val:"AES-256"}], status: "營運中" }
+            ]
+          },
+          {
+            id: "devops", name: "DevOps 部署管線", code: "06", q: -1, r: 0,
+            desc: "持續整合、自動化測試與零停機發布工廠。",
+            nodes: [
+              { id: "dvo_ci", name: "CI/CD 自動化流線", model: "devops_conveyor", desc: "代碼提交即自動觸發單元測試與安全掃描。", metrics: [{label:"日建置數", val:"145"}, {label:"平均耗時", val:"3.2m"}, {label:"成功率", val:"97.8%"}], status: "營運中" },
+              { id: "dvo_harbor", name: "企業製品與映像庫", model: "database", desc: "容器映像檔脆弱性掃描與分發儲存庫。", metrics: [{label:"映像檔數", val:"3,400"}, {label:"弱點掃描", val:"通過"}, {label:"簽章驗證", val:"強制"}], status: "營運中" },
+              { id: "dvo_monitor", name: "可觀測性遙測中心", model: "server", desc: "採集全行 Logs、Metrics 與 Distributed Tracing。", metrics: [{label:"採集速率", val:"45k/s"}, {label:"告警響應", val:"<30s"}, {label:"保留天數", val:"90"}], status: "營運中" }
+            ]
+          },
+          {
+            id: "gov", name: "資訊治理與資安規章", code: "07", q: 0, r: -1,
+            desc: "架構稽核、弱點管理與資安防護規範合規中心。",
+            nodes: [
+              { id: "gov_soc", name: "資安維運監控 (SOC)", model: "governance_shield", desc: "7x24 即時網路威脅情報分析與阻斷應變。", metrics: [{label:"每日事件", val:"12.8M"}, {label:"誤報率", val:"0.01%"}, {label:"防護層級", val:"特級"}], status: "營運中" },
+              { id: "gov_audit", name: "架構法規自動審查", model: "governance_shield", desc: "自動比對資安規章基準，偵測組態漂移。", metrics: [{label:"合規率", val:"99.4%"}, {label:"定期稽核", val:"已通過"}, {label:"改善項", val:"0"}], status: "營運中" },
+              { id: "gov_kms", name: "金鑰與密碼學管理", model: "governance_shield", desc: "HSM 硬體加密模組，控管根憑證與資料庫金鑰。", metrics: [{label:"密鑰輪換", val:"自動"}, {label:"硬體認證", val:"FIPS 140-2"}, {label:"簽章延遲", val:"0.8ms"}], status: "營運中" }
+            ]
+          }
+        ],
+        dataFlows: [
+          { id: "flow_core_db", from: "core", to: "db", cargo: "交易日誌", charType: "dba", style: "active", desc: "核心主機實時雙寫交易紀錄至持久層" },
+          { id: "flow_srv_core", from: "servers", to: "core", cargo: "JSON 封包", charType: "admin", style: "active", desc: "微服務透過內網 RPC 呼叫核心主機處理交易" },
+          { id: "flow_svc_srv", from: "services", to: "servers", cargo: "API 請求", charType: "robot", style: "active", desc: "開放 API 轉發業務中台進行權限校驗與運算" },
+          { id: "flow_dvo_srv", from: "devops", to: "servers", cargo: "發布包", charType: "devops", style: "active", desc: "自動化藍綠發布更新容器叢集應用程式" },
+          { id: "flow_cld_svc", from: "cloud", to: "services", cargo: "AI 推論", charType: "robot", style: "active", desc: "雲端大模型串流回應業務中台智慧推薦結果" },
+          { id: "flow_gov_core", from: "gov", to: "core", cargo: "稽核軌跡", charType: "auditor", style: "degraded", desc: "定時產出核心交易不可抹滅之資安存證日誌" },
+          { id: "flow_gov_dvo", from: "gov", to: "devops", cargo: "合規報告", charType: "auditor", style: "pending", desc: "持續交付管線安全檢查閘口確認 (Security Gate)" },
+          { id: "flow_cld_db", from: "cloud", to: "db", cargo: "分析備份", charType: "dba", style: "active", desc: "夜間將歷史大數據卸載至雲端冷儲存湖" }
+        ],
+        dayCycles: [
+          { time: 120, name: "離峰維護", activeNodes: ["core_batch", "db_arch", "dvo_ci"] },
+          { time: 540, name: "早會暖機", activeNodes: ["srv_k8s_master", "srv_iam", "gov_soc", "cld_vpn_gw"] },
+          { time: 840, name: "尖峰負載", activeNodes: ["core_main", "srv_edge", "db_cache", "svc_payment", "cld_auto_scale"] },
+          { time: 1320, name: "夜間批次", activeNodes: ["core_batch", "db_analytics", "cld_ai_cluster"] }
+        ]
+      };
+
+      const R = 2.02;
+      const SPACING = 2.28;
+      const TOP = 0.65;
+      const WATER_Y = -0.18;
+
+      function axialToWorld(q, r) {
+        const x = Math.sqrt(3) * SPACING * (q + r / 2);
+        const z = 1.5 * SPACING * r;
+        return new THREE.Vector3(x, 0, z);
+      }
+
+      const islandMap = new Map();
+      DATA.islands.forEach(isl => {
+        isl.worldPos = axialToWorld(isl.q, isl.r);
+        islandMap.set(isl.id, isl);
+      });
+
+      /* 畫布貼圖即時產生 */
+      function createGroundCanvasTexture() {
+        const cvs = document.createElement('canvas');
+        cvs.width = 256; cvs.height = 256;
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = "#eddccf";
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.strokeStyle = "rgba(180, 150, 130, 0.28)";
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i <= 256; i += 32) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(62, 174, 196, 0.2)";
+        for (let x = 16; x < 256; x += 32) {
+          for (let y = 16; y < 256; y += 32) {
+            ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        const tex = new THREE.CanvasTexture(cvs);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+      }
+      const groundTexture = createGroundCanvasTexture();
+
+      function createBadgeTexture(text) {
+        const cvs = document.createElement('canvas');
+        cvs.width = 128; cvs.height = 128;
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.arc(64, 64, 52, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 8; ctx.strokeStyle = "#3eaec4"; ctx.stroke();
+        ctx.fillStyle = "#211d1d";
+        ctx.font = "bold 26px sans-serif";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(text.slice(0, 4), 64, 65);
+        return new THREE.CanvasTexture(cvs);
+      }
+
+      /* 渲染器與相機初始化 */
+      const canvas = document.getElementById('webgl-canvas');
+      const css2dContainer = document.getElementById('css2d-container');
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 0.3, 320);
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas, antialias: true, alpha: true, powerPreference: "high-performance"
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+      // 正確掛載 CSS2DRenderer
+      const labelRenderer = new CSS2DRenderer();
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.domElement.style.position = 'absolute';
+      labelRenderer.domElement.style.top = '0px';
+      labelRenderer.domElement.style.left = '0px';
+      labelRenderer.domElement.style.pointerEvents = 'none';
+      css2dContainer.appendChild(labelRenderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.enablePan = false;
+      controls.minPolarAngle = THREE.MathUtils.degToRad(25);
+      controls.maxPolarAngle = THREE.MathUtils.degToRad(70);
+      controls.minDistance = 6;
+      controls.maxDistance = 65;
+
+      function resetCameraOverview() {
+        const dir = new THREE.Vector3(0.24, 0.33, 0.87).normalize();
+        const dist = window.innerWidth > 900 ? 30 : 44;
+        camera.position.copy(dir.multiplyScalar(dist));
+        controls.target.set(0, 0.5, 0);
+        controls.update();
+      }
+      resetCameraOverview();
+
+      /* 環境、光線與天空水面 */
+      scene.fog = new THREE.Fog(0xf4eee3, 40, 150);
+
+      const hemiLight = new THREE.HemisphereLight(0xeef6fa, 0x8f8270, 1.3);
+      scene.add(hemiLight);
+
+      const sunLight = new THREE.DirectionalLight(0xfff1de, 2.8);
+      sunLight.position.set(22, 38, 20);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 1;
+      sunLight.shadow.camera.far = 90;
+      sunLight.shadow.camera.left = -22;
+      sunLight.shadow.camera.right = 22;
+      sunLight.shadow.camera.top = 22;
+      sunLight.shadow.camera.bottom = -22;
+      sunLight.shadow.bias = -0.0006;
+      sunLight.shadow.normalBias = 0.045;
+      sunLight.shadow.radius = 2.5;
+      scene.add(sunLight);
+
+      const fillLight = new THREE.DirectionalLight(0xbfd6ff, 0.35);
+      fillLight.position.set(-20, 15, -20);
+      scene.add(fillLight);
+
+      const skyGeo = new THREE.SphereGeometry(170, 32, 16);
+      const skyMat = new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        uniforms: {
+          uTop: { value: new THREE.Color(0x3f628c) },
+          uHorizon: { value: new THREE.Color(0xf4eee3) },
+          uSunDir: { value: new THREE.Vector3(0.4, 0.6, 0.3).normalize() },
+          uNight: { value: 0.0 }
+        },
+        vertexShader: `
+          varying vec3 vWorldDir;
+          void main() {
+            vWorldDir = normalize(position);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uTop;
+          uniform vec3 uHorizon;
+          uniform vec3 uSunDir;
+          uniform float uNight;
+          varying vec3 vWorldDir;
+
+          float hash(vec3 p) {
+            p = fract(p * 0.3183099 + .1);
+            p *= 17.0;
+            return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+          }
+
+          void main() {
+            vec3 dir = normalize(vWorldDir);
+            float h = smoothstep(-0.02, 0.55, dir.y);
+            vec3 col = mix(uHorizon, uTop, h);
+            float sunDot = max(0.0, dot(dir, uSunDir));
+            col += vec3(1.0, 0.9, 0.7) * pow(sunDot, 18.0) * 0.35;
+            if(uNight > 0.05 && dir.y > 0.08) {
+              float star = hash(floor(dir * 180.0));
+              if(star > 0.9965) {
+                col += vec3(1.0) * uNight * 1.5;
+              }
+            }
+            gl_FragColor = vec4(col, 1.0);
+          }
+        `
+      });
+      scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+      const waterGeo = new THREE.CircleGeometry(160, 64);
+      const waterMat = new THREE.ShaderMaterial({
+        transparent: true,
+        uniforms: {
+          uTime: { value: 0 },
+          uFogColor: { value: scene.fog.color },
+          uFogNear: { value: scene.fog.near },
+          uFogFar: { value: scene.fog.far }
+        },
+        vertexShader: `
+          varying vec3 vWorldPos;
+          void main() {
+            vec4 wp = modelMatrix * vec4(position, 1.0);
+            vWorldPos = wp.xyz;
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          uniform vec3 uFogColor;
+          uniform float uFogNear;
+          uniform float uFogFar;
+          varying vec3 vWorldPos;
+
+          void main() {
+            float dist = length(vWorldPos.xz);
+            vec3 shallow = vec3(0.643, 0.831, 0.855);
+            vec3 deep = vec3(0.435, 0.663, 0.722);
+            float wave = sin(vWorldPos.x * 0.35 + uTime * 1.2) * cos(vWorldPos.z * 0.35 + uTime * 1.1);
+            float depthFactor = smoothstep(6.0, 45.0, dist);
+            vec3 col = mix(shallow, deep, depthFactor + wave * 0.08);
+            float d = length(vWorldPos - cameraPosition);
+            float fogFactor = smoothstep(uFogNear, uFogFar, d);
+            col = mix(col, uFogColor, fogFactor);
+            gl_FragColor = vec4(col, 0.94);
+          }
+        `
+      });
+      const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+      waterMesh.rotation.x = -Math.PI / 2;
+      waterMesh.position.y = WATER_Y;
+      scene.add(waterMesh);
+
+      /* 島嶼與路網建造 */
+      const islandGroup = new THREE.Group();
+      scene.add(islandGroup);
+
+      const hexRadius = R - 0.05;
+      const hexTopGeo = new THREE.CircleGeometry(hexRadius, 6);
+      hexTopGeo.rotateZ(Math.PI / 6);
+      hexTopGeo.rotateX(-Math.PI / 2);
+
+      const posAttr = hexTopGeo.attributes.position;
+      const uvs = new Float32Array((posAttr.count) * 2);
+      for (let i = 0; i < posAttr.count; i++) {
+        uvs[i * 2] = posAttr.getX(i) / 2.2;
+        uvs[i * 2 + 1] = posAttr.getZ(i) / 2.2;
+      }
+      hexTopGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+
+      const hexTopMat = new THREE.MeshStandardMaterial({
+        map: groundTexture, roughness: 0.92, metalness: 0.05,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1
+      });
+
+      const skirtGeo = new THREE.CylinderGeometry(hexRadius, hexRadius * 0.92, TOP - WATER_Y, 6);
+      skirtGeo.rotateY(Math.PI / 6);
+      const skirtMat = new THREE.MeshStandardMaterial({ color: 0xc8b8a5, roughness: 0.85 });
+
+      const walkwayGeo = new THREE.RingGeometry(1.58, 1.84, 6);
+      walkwayGeo.rotateZ(Math.PI / 6);
+      walkwayGeo.rotateX(-Math.PI / 2);
+      const walkwayMat = new THREE.MeshStandardMaterial({
+        color: 0xe3d2be, roughness: 0.95,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+      });
+
+      const foamGeo = new THREE.RingGeometry(R + 0.05, R + 0.22, 6);
+      foamGeo.rotateZ(Math.PI / 6);
+      foamGeo.rotateX(-Math.PI / 2);
+      const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
+
+      function createBridge(p1, p2) {
+        const group = new THREE.Group();
+        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+        const dir = new THREE.Vector3().subVectors(p2, p1);
+        const len = dir.length();
+        const angle = Math.atan2(dir.x, dir.z);
+
+        const planks = 9;
+        const plankGeo = new RoundedBoxGeometry(0.38, 0.06, len / planks * 0.85, 2, 0.015);
+        const plankMat = new THREE.MeshStandardMaterial({ color: 0xdec8b3, roughness: 0.85 });
+
+        for (let i = 0; i < planks; i++) {
+          const t = (i + 0.5) / planks;
+          const arch = Math.sin(t * Math.PI) * 0.09;
+          const mesh = new THREE.Mesh(plankGeo, plankMat);
+          mesh.position.set(0, TOP + arch, (t - 0.5) * len);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          group.add(mesh);
+        }
+        group.position.copy(mid);
+        group.rotation.y = angle;
+        return group;
+      }
+
+      const waypoints = [];
+      const waylinks = [];
+      const islandPillObjects = [];
+
+      DATA.islands.forEach((isl) => {
+        const pos = isl.worldPos;
+        const iGrp = new THREE.Group();
+        iGrp.position.set(pos.x, 0, pos.z);
+
+        const topMesh = new THREE.Mesh(hexTopGeo, hexTopMat);
+        topMesh.position.y = TOP;
+        topMesh.receiveShadow = true;
+        iGrp.add(topMesh);
+
+        const walkMesh = new THREE.Mesh(walkwayGeo, walkwayMat);
+        walkMesh.position.y = TOP + 0.002;
+        walkMesh.receiveShadow = true;
+        iGrp.add(walkMesh);
+
+        const skirtMesh = new THREE.Mesh(skirtGeo, skirtMat);
+        skirtMesh.position.y = (TOP + WATER_Y) / 2;
+        skirtMesh.castShadow = true;
+        skirtMesh.receiveShadow = true;
+        iGrp.add(skirtMesh);
+
+        const foamMesh = new THREE.Mesh(foamGeo, foamMat);
+        foamMesh.position.y = WATER_Y + 0.01;
+        iGrp.add(foamMesh);
+
+        // CSS2D 標籤
+        const badgeDiv = document.createElement('div');
+        badgeDiv.className = 'island-badge';
+        badgeDiv.innerHTML = `${isl.code} ${isl.name}`;
+        badgeDiv.onclick = () => selectEntity('island', isl.id);
+        const c2dObj = new CSS2DObject(badgeDiv);
+        c2dObj.position.set(0, TOP + 0.45, R * 0.95);
+        iGrp.add(c2dObj);
+        islandPillObjects.push({ id: isl.id, element: badgeDiv });
+
+        islandGroup.add(iGrp);
+
+        const islandWayStart = waypoints.length;
+        for (let i = 0; i < 6; i++) {
+          const a1 = (Math.PI / 3) * i + Math.PI / 6;
+          const a2 = (Math.PI / 3) * (i + 1) + Math.PI / 6;
+          const rad = 1.71;
+          const vx = pos.x + Math.cos(a1) * rad;
+          const vz = pos.z + Math.sin(a1) * rad;
+          waypoints.push(new THREE.Vector3(vx, TOP + 0.02, vz));
+
+          const mx = pos.x + Math.cos((a1 + a2) / 2) * rad;
+          const mz = pos.z + Math.sin((a1 + a2) / 2) * rad;
+          waypoints.push(new THREE.Vector3(mx, TOP + 0.02, mz));
+        }
+
+        for (let k = 0; k < 12; k++) {
+          waylinks.push([islandWayStart + k, islandWayStart + ((k + 1) % 12)]);
+        }
+      });
+
+      for (let i = 0; i < DATA.islands.length; i++) {
+        for (let j = i + 1; j < DATA.islands.length; j++) {
+          const isA = DATA.islands[i];
+          const isB = DATA.islands[j];
+          if (isA.worldPos.distanceTo(isB.worldPos) < 4.2) {
+            scene.add(createBridge(isA.worldPos, isB.worldPos));
+            let bestPair = null;
+            let minD = 999;
+            const aOffset = i * 12;
+            const bOffset = j * 12;
+            for (let m = 1; m < 12; m += 2) {
+              for (let n = 1; n < 12; n += 2) {
+                const d = waypoints[aOffset + m].distanceTo(waypoints[bOffset + n]);
+                if (d < minD) { minD = d; bestPair = [aOffset + m, bOffset + n]; }
+              }
+            }
+            if (bestPair) waylinks.push(bestPair);
+          }
+        }
+      }
+
+      /* 建物零件庫與 InstancedMesh 建造 */
+      const archetypes = {
+        box: new THREE.BoxGeometry(1, 1, 1),
+        rbox: new RoundedBoxGeometry(1, 1, 1, 2, 0.08),
+        cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 24),
+        sphere: new THREE.SphereGeometry(0.5, 20, 16),
+        cone: new THREE.ConeGeometry(0.5, 1, 16),
+        torus: new THREE.TorusGeometry(0.5, 0.12, 12, 24),
+        glowbox: new THREE.BoxGeometry(1, 1, 1),
+        glowsphere: new THREE.SphereGeometry(0.5, 16, 12)
+      };
+
+      const instancedParts = [];
+      const solidMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88, metalness: 0.08 });
+      const glowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, emissive: 0x00ffcc, emissiveIntensity: 0.9 });
+      const nodeMetadata = new Map();
+
+      function pushPart(kind, matrix, colorHex, nodeId) {
+        instancedParts.push({ kind, matrix: matrix.clone(), color: new THREE.Color(colorHex), nodeId });
+      }
+
+      DATA.islands.forEach(isl => {
+        const center = isl.worldPos;
+        const count = isl.nodes.length;
+
+        isl.nodes.forEach((node, idx) => {
+          let localOffset = new THREE.Vector3();
+          if (idx === 0) {
+            localOffset.set(0, 0, -0.45);
+          } else {
+            const angle = (Math.PI * 2 / (count - 1)) * (idx - 1) + 0.3;
+            localOffset.set(Math.cos(angle) * 0.88, 0, Math.sin(angle) * 0.88 * 0.8 + 0.25);
+          }
+
+          const basePos = new THREE.Vector3().addVectors(center, localOffset);
+          basePos.y = TOP;
+          const m = new THREE.Matrix4();
+          const sc = 0.55;
+
+          if (node.model === "mainframe") {
+            m.makeScale(0.85 * sc, 1.2 * sc, 0.85 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.6 * sc, basePos.z);
+            pushPart("rbox", m, 0x211d1d, node.id);
+
+            m.makeScale(0.7 * sc, 0.1 * sc, 0.72 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.4 * sc, basePos.z);
+            pushPart("glowbox", m, 0x3eaec4, node.id);
+
+            m.makeScale(0.7 * sc, 0.1 * sc, 0.72 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.8 * sc, basePos.z);
+            pushPart("glowbox", m, 0x5cf279, node.id);
+          } else if (node.model === "server") {
+            m.makeScale(0.55 * sc, 1.1 * sc, 0.45 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.55 * sc, basePos.z);
+            pushPart("rbox", m, 0x323a45, node.id);
+
+            m.makeScale(0.42 * sc, 0.06 * sc, 0.46 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.75 * sc, basePos.z);
+            pushPart("glowbox", m, 0x3eaec4, node.id);
+          } else if (node.model === "database") {
+            for (let l = 0; l < 3; l++) {
+              m.makeScale(0.7 * sc, 0.28 * sc, 0.7 * sc);
+              m.setPosition(basePos.x, basePos.y + (0.2 + l * 0.32) * sc, basePos.z);
+              pushPart("cylinder", m, 0xdb6a41, node.id);
+            }
+          } else if (node.model === "cloud_node") {
+            m.makeScale(0.55 * sc, 0.55 * sc, 0.55 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.9 * sc, basePos.z);
+            pushPart("glowbox", m, 0x3eaec4, node.id);
+
+            m.makeScale(0.8 * sc, 0.8 * sc, 0.8 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.4 * sc, basePos.z);
+            pushPart("torus", m, 0xfff8f4, node.id);
+          } else if (node.model === "devops_conveyor") {
+            m.makeScale(0.9 * sc, 0.2 * sc, 0.45 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.15 * sc, basePos.z);
+            pushPart("box", m, 0x6e7882, node.id);
+
+            m.makeScale(0.35 * sc, 0.35 * sc, 0.35 * sc);
+            m.setPosition(basePos.x - 0.25 * sc, basePos.y + 0.4 * sc, basePos.z);
+            pushPart("torus", m, 0xdb6a41, node.id);
+          } else if (node.model === "governance_shield") {
+            m.makeScale(0.65 * sc, 0.85 * sc, 0.25 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.5 * sc, basePos.z);
+            pushPart("rbox", m, 0x2ec971, node.id);
+          } else {
+            m.makeScale(0.6 * sc, 0.5 * sc, 0.6 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.25 * sc, basePos.z);
+            pushPart("rbox", m, 0x3eaec4, node.id);
+
+            m.makeScale(0.18 * sc, 0.18 * sc, 0.18 * sc);
+            m.setPosition(basePos.x, basePos.y + 0.9 * sc, basePos.z);
+            pushPart("glowsphere", m, 0x5cf279, node.id);
+          }
+
+          nodeMetadata.set(node.id, {
+            centerPos: basePos.clone().add(new THREE.Vector3(0, 0.6, 0)),
+            islandId: isl.id,
+            data: node
+          });
+        });
+
+        for (let l = 0; l < 3; l++) {
+          const a = (Math.PI * 2 / 3) * l + Math.PI / 6;
+          const lx = center.x + Math.cos(a) * 1.82;
+          const lz = center.z + Math.sin(a) * 1.82;
+          const lm = new THREE.Matrix4();
+          lm.makeScale(0.06, 0.55, 0.06);
+          lm.setPosition(lx, TOP + 0.27, lz);
+          pushPart("cylinder", lm, 0x332e2e, `lamp_${isl.id}_${l}`);
+
+          const topm = new THREE.Matrix4();
+          topm.makeScale(0.14, 0.14, 0.14);
+          topm.setPosition(lx, TOP + 0.58, lz);
+          pushPart("glowsphere", topm, 0xffc777, `lamp_b_${isl.id}_${l}`);
+        }
+      });
+
+      const instancedMeshMap = new Map();
+      const kindGroups = {};
+      instancedParts.forEach((part, globalIdx) => {
+        if (!kindGroups[part.kind]) kindGroups[part.kind] = [];
+        kindGroups[part.kind].push({ ...part, globalIdx });
+      });
+
+      for (const kind in kindGroups) {
+        const items = kindGroups[kind];
+        const count = items.length;
+        const isGlow = kind.startsWith('glow');
+        const mesh = new THREE.InstancedMesh(archetypes[kind], isGlow ? glowMat : solidMat, count);
+        mesh.castShadow = !isGlow;
+        mesh.receiveShadow = true;
+
+        items.forEach((item, idx) => {
+          mesh.setMatrixAt(idx, item.matrix);
+          mesh.setColorAt(idx, item.color);
+          item.instancedIndex = idx;
+          item.mesh = mesh;
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        scene.add(mesh);
+        instancedMeshMap.set(kind, mesh);
+      }
+
+      /* 遠景山巒 */
+      const crystalGeo = new THREE.ConeGeometry(3.5, 9, 5);
+      const crystalMat = new THREE.MeshStandardMaterial({ color: 0xbed6d4, roughness: 0.9, flatShading: true });
+      const bgGroup = new THREE.Group();
+      for (let i = 0; i < 28; i++) {
+        const ang = (Math.PI * 2 / 28) * i;
+        const dist = 52 + rng() * 30;
+        const m = new THREE.Mesh(crystalGeo, crystalMat);
+        m.position.set(Math.cos(ang) * dist, -1 + rng() * 2, Math.sin(ang) * dist);
+        const s = 1.2 + rng() * 1.8;
+        m.scale.set(s, s * (0.8 + rng() * 0.8), s);
+        m.rotation.y = rng() * Math.PI;
+        bgGroup.add(m);
+      }
+      scene.add(bgGroup);
+
+      /* Dijkstra 拓撲尋路 */
+      function dijkstra(startIdx, targetIdx) {
+        const dist = new Array(waypoints.length).fill(Infinity);
+        const prev = new Array(waypoints.length).fill(-1);
+        const visited = new Set();
+        dist[startIdx] = 0;
+
+        while (visited.size < waypoints.length) {
+          let u = -1, minD = Infinity;
+          for (let i = 0; i < waypoints.length; i++) {
+            if (!visited.has(i) && dist[i] < minD) { minD = dist[i]; u = i; }
+          }
+          if (u === -1 || u === targetIdx) break;
+          visited.add(u);
+
+          for (const [a, b] of waylinks) {
+            let v = (a === u) ? b : ((b === u) ? a : -1);
+            if (v !== -1 && !visited.has(v)) {
+              const w = waypoints[u].distanceTo(waypoints[v]);
+              if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; }
+            }
+          }
+        }
+        const path = [];
+        let curr = targetIdx;
+        while (curr !== -1) {
+          path.unshift(waypoints[curr].clone());
+          curr = prev[curr];
+        }
+        return path.length > 1 ? path : [waypoints[startIdx], waypoints[targetIdx]];
+      }
+
+      /* 資料流管線 */
+      const flowTubes = [];
+      DATA.dataFlows.forEach((flow) => {
+        const startIdx = DATA.islands.findIndex(x => x.id === flow.from) * 12;
+        const endIdx = DATA.islands.findIndex(x => x.id === flow.to) * 12;
+        const pts = dijkstra(startIdx, endIdx);
+        const elevatedPts = pts.map(p => p.clone().add(new THREE.Vector3(0, 0.08, 0)));
+        const curve = new THREE.CatmullRomCurve3(elevatedPts);
+        const tubeGeo = new THREE.TubeGeometry(curve, Math.max(20, pts.length * 6), 0.035, 8, false);
+
+        const tubeMat = new THREE.ShaderMaterial({
+          transparent: true,
+          uniforms: {
+            uTime: { value: 0 },
+            uColor: { value: flow.style === 'degraded' ? new THREE.Color(0xdb6a41) : new THREE.Color(0x3eaec4) },
+            uStyle: { value: flow.style === 'active' ? 1.0 : (flow.style === 'degraded' ? 2.0 : 3.0) },
+            uOpacity: { value: 0.85 }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform float uTime;
+            uniform vec3 uColor;
+            uniform float uStyle;
+            uniform float uOpacity;
+            varying vec2 vUv;
+            void main() {
+              float lineU = vUv.x * 24.0 - uTime * 1.6;
+              float alpha = uOpacity;
+              if (uStyle > 1.5 && uStyle < 2.5) {
+                alpha *= step(0.5, fract(lineU * 0.5));
+              } else if (uStyle > 2.5) {
+                alpha *= step(0.7, fract(lineU * 0.8));
+              } else {
+                alpha *= (sin(lineU * 2.0) * 0.35 + 0.65);
+              }
+              gl_FragColor = vec4(uColor, alpha);
+            }
+          `
+        });
+        const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+        scene.add(tubeMesh);
+        flowTubes.push({ mesh: tubeMesh, mat: tubeMat });
+      });
+
+      /* 巡弋小人 */
+      const characters = [];
+      const chibiHeadGeo = new RoundedBoxGeometry(0.18, 0.16, 0.16, 2, 0.03);
+      const chibiBodyGeo = new RoundedBoxGeometry(0.12, 0.14, 0.1, 2, 0.02);
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdfd2, roughness: 0.8 });
+
+      DATA.dataFlows.forEach((flow) => {
+        const startIdx = DATA.islands.findIndex(x => x.id === flow.from) * 12;
+        const endIdx = DATA.islands.findIndex(x => x.id === flow.to) * 12;
+        const curve = new THREE.CatmullRomCurve3(dijkstra(startIdx, endIdx));
+
+        for (let c = 0; c < 2; c++) {
+          const charGrp = new THREE.Group();
+          let suitColor = 0x3eaec4;
+          if (flow.charType === 'dba') suitColor = 0xdb6a41;
+          if (flow.charType === 'devops') suitColor = 0xf2a93b;
+          if (flow.charType === 'auditor') suitColor = 0x2ec971;
+
+          const bodyMat = new THREE.MeshStandardMaterial({ color: suitColor, roughness: 0.8 });
+          const bMesh = new THREE.Mesh(chibiBodyGeo, bodyMat);
+          bMesh.position.y = 0.09; bMesh.castShadow = true;
+          charGrp.add(bMesh);
+
+          const hMesh = new THREE.Mesh(chibiHeadGeo, flow.charType === 'robot' ? bodyMat : skinMat);
+          hMesh.position.y = 0.24; hMesh.castShadow = true;
+          charGrp.add(hMesh);
+
+          const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: createBadgeTexture(flow.cargo) }));
+          sprite.position.set(0, 0.44, 0);
+          sprite.scale.set(0.24, 0.24, 1);
+          charGrp.add(sprite);
+
+          const bubbleDiv = document.createElement('div');
+          bubbleDiv.className = 'chat-bubble';
+          bubbleDiv.innerText = `運送 ${flow.cargo}`;
+          const c2dBubble = new CSS2DObject(bubbleDiv);
+          c2dBubble.position.set(0, 0.52, 0);
+          charGrp.add(c2dBubble);
+
+          scene.add(charGrp);
+          characters.push({
+            group: charGrp, curve,
+            t: (c * 0.5 + rng() * 0.2) % 1,
+            speed: 0.045 + rng() * 0.025,
+            forward: true,
+            bubbleElement: bubbleDiv
+          });
+        }
+      });
+
+      /* 日夜循環設定 */
+      const DAY_KEYFRAMES = [
+        { min: 0,    top: 0x1e2c58, hor: 0x3f4f80, sun: 0xb4c2ff, sunI: 1.15, hemiSky: 0x94a2d8, hemiG: 0x64566a, hemiI: 1.85, night: 1.0 },
+        { min: 360,  top: 0x3f5c88, hor: 0xf5b28d, sun: 0xffb076, sunI: 2.10, hemiSky: 0xffd2b8, hemiG: 0x8a7266, hemiI: 1.40, night: 0.2 },
+        { min: 720,  top: 0x467eb8, hor: 0xfbf8f3, sun: 0xfff1de, sunI: 2.80, hemiSky: 0xeef6fa, hemiG: 0x8f8270, hemiI: 1.30, night: 0.0 },
+        { min: 1080, top: 0x384a75, hor: 0xe58b68, sun: 0xff8c55, sunI: 2.30, hemiSky: 0xffb59b, hemiG: 0x6e5254, hemiI: 1.50, night: 0.4 },
+        { min: 1440, top: 0x1e2c58, hor: 0x3f4f80, sun: 0xb4c2ff, sunI: 1.15, hemiSky: 0x94a2d8, hemiG: 0x64566a, hemiI: 1.85, night: 1.0 }
+      ];
+
+      let currentDayMinutes = 540;
+      let selectedEntity = null;
+
+      function updateDayNightCycle(minuteVal) {
+        currentDayMinutes = (minuteVal + 1440) % 1440;
+        let k1 = DAY_KEYFRAMES[0], k2 = DAY_KEYFRAMES[1];
+        for (let i = 0; i < DAY_KEYFRAMES.length - 1; i++) {
+          if (currentDayMinutes >= DAY_KEYFRAMES[i].min && currentDayMinutes <= DAY_KEYFRAMES[i + 1].min) {
+            k1 = DAY_KEYFRAMES[i]; k2 = DAY_KEYFRAMES[i + 1];
+            break;
+          }
+        }
+        const alpha = (currentDayMinutes - k1.min) / (k2.min - k1.min);
+
+        const topC = new THREE.Color(k1.top).lerp(new THREE.Color(k2.top), alpha);
+        const horC = new THREE.Color(k1.hor).lerp(new THREE.Color(k2.hor), alpha);
+        const sunC = new THREE.Color(k1.sun).lerp(new THREE.Color(k2.sun), alpha);
+        const hemiSkyC = new THREE.Color(k1.hemiSky).lerp(new THREE.Color(k2.hemiSky), alpha);
+        const hemiGC = new THREE.Color(k1.hemiG).lerp(new THREE.Color(k2.hemiG), alpha);
+        const sunI = THREE.MathUtils.lerp(k1.sunI, k2.sunI, alpha);
+        const hemiI = THREE.MathUtils.lerp(k1.hemiI, k2.hemiI, alpha);
+        const night = THREE.MathUtils.lerp(k1.night, k2.night, alpha);
+
+        const sunAngle = (currentDayMinutes / 1440) * Math.PI * 2 - Math.PI / 2;
+        sunLight.position.set(Math.cos(sunAngle) * 35, Math.sin(sunAngle) * 38, 20);
+        sunLight.color.copy(sunC);
+        sunLight.intensity = sunI;
+
+        hemiLight.color.copy(hemiSkyC);
+        hemiLight.groundColor.copy(hemiGC);
+        hemiLight.intensity = hemiI;
+
+        scene.fog.color.copy(horC);
+
+        skyMat.uniforms.uTop.value.copy(topC);
+        skyMat.uniforms.uHorizon.value.copy(horC);
+        skyMat.uniforms.uSunDir.value.copy(sunLight.position).normalize();
+        skyMat.uniforms.uNight.value = night;
+        glowMat.emissiveIntensity = 0.6 + night * 2.8;
+
+        updateCycleActiveNodes();
+      }
+
+      function updateCycleActiveNodes() {
+        let activeList = [];
+        DATA.dayCycles.forEach(dc => {
+          if (Math.abs(dc.time - currentDayMinutes) < 180) activeList = dc.activeNodes;
+        });
+
+        instancedParts.forEach(part => {
+          if (!part.mesh) return;
+          const baseColor = part.color.clone();
+          if (activeList.includes(part.nodeId)) baseColor.lerp(new THREE.Color(0x5cf279), 0.35);
+          if (selectedEntity && selectedEntity.id === part.nodeId) baseColor.lerp(new THREE.Color(0x3eaec4), 0.55);
+          part.mesh.setColorAt(part.instancedIndex, baseColor);
+        });
+
+        instancedMeshMap.forEach(mesh => {
+          if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        });
+      }
+
+      /* 平滑飛行控制器 */
+      let isFlying = false;
+      let flightStart = 0;
+      const flightDuration = 800;
+      let camStartPos = new THREE.Vector3(), camEndPos = new THREE.Vector3();
+      let targetStart = new THREE.Vector3(), targetEnd = new THREE.Vector3();
+
+      function easeInOutCubic(x) {
+        return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+      }
+
+      function flyTo(targetPoint, offset) {
+        isFlying = true;
+        flightStart = performance.now();
+        camStartPos.copy(camera.position);
+        targetStart.copy(controls.target);
+        targetEnd.copy(targetPoint);
+        if (window.innerWidth > 900) targetEnd.x += 1.2;
+        camEndPos.copy(targetPoint).add(offset);
+      }
+      controls.addEventListener('start', () => { isFlying = false; });
+
+      /* 選取邏輯 */
+      function selectEntity(type, id) {
+        selectedEntity = { type, id };
+        const detailCard = document.getElementById('detail-card');
+        const tagEl = document.getElementById('detail-type-tag');
+        const titleEl = document.getElementById('detail-title');
+        const descEl = document.getElementById('detail-desc');
+        const metricsEl = document.getElementById('detail-metrics');
+
+        detailCard.classList.remove('hidden');
+
+        if (type === 'island') {
+          const isl = islandMap.get(id);
+          tagEl.innerText = `主題架構島 · ${isl.code}`;
+          titleEl.innerText = isl.name;
+          descEl.innerText = isl.desc;
+          metricsEl.innerHTML = `
+            <div class="metric-box"><div class="metric-val">${isl.nodes.length}</div><div class="metric-lbl">子系統數</div></div>
+            <div class="metric-box"><div class="metric-val">正常</div><div class="metric-lbl">叢集健康</div></div>
+            <div class="metric-box"><div class="metric-val">100%</div><div class="metric-lbl">容災覆蓋</div></div>
+          `;
+          flyTo(isl.worldPos, new THREE.Vector3(2.75, 5.3, 6.2));
+        } else if (type === 'node') {
+          const nodeInfo = nodeMetadata.get(id);
+          const node = nodeInfo.data;
+          tagEl.innerText = `系統節點 · ${node.status}`;
+          titleEl.innerText = node.name;
+          descEl.innerText = node.desc;
+          metricsEl.innerHTML = node.metrics.map(m => `
+            <div class="metric-box"><div class="metric-val">${m.val}</div><div class="metric-lbl">${m.label}</div></div>
+          `).join('');
+          flyTo(nodeInfo.centerPos, new THREE.Vector3(1.6, 2.5, 3.2));
+        } else if (type === 'flow') {
+          const flow = DATA.dataFlows.find(f => f.id === id);
+          const islFrom = islandMap.get(flow.from);
+          const islTo = islandMap.get(flow.to);
+          tagEl.innerText = `資料傳輸線 · ${flow.style.toUpperCase()}`;
+          titleEl.innerText = `${islFrom.name} → ${islTo.name}`;
+          descEl.innerText = flow.desc;
+          metricsEl.innerHTML = `
+            <div class="metric-box"><div class="metric-val">${flow.cargo}</div><div class="metric-lbl">運送負載</div></div>
+            <div class="metric-box"><div class="metric-val">${flow.style === 'active' ? '0.4ms' : '12ms'}</div><div class="metric-lbl">平均延遲</div></div>
+            <div class="metric-box"><div class="metric-val">${flow.style === 'active' ? '暢通' : '排隊中'}</div><div class="metric-lbl">管道狀態</div></div>
+          `;
+          const midPoint = new THREE.Vector3().addVectors(islFrom.worldPos, islTo.worldPos).multiplyScalar(0.5);
+          flyTo(midPoint, new THREE.Vector3(2.2, 4.2, 5.0));
+        }
+
+        islandPillObjects.forEach(item => {
+          if (item.id === id) item.element.classList.add('selected');
+          else item.element.classList.remove('selected');
+        });
+        updateCycleActiveNodes();
+      }
+
+      document.getElementById('card-close-btn').onclick = () => {
+        document.getElementById('detail-card').classList.add('hidden');
+        selectedEntity = null;
+        islandPillObjects.forEach(item => item.element.classList.remove('selected'));
+        updateCycleActiveNodes();
+      };
+
+      /* Raycasting 點擊拾取 */
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      let pointerDownPos = { x: 0, y: 0 };
+
+      window.addEventListener('pointerdown', (e) => {
+        pointerDownPos = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener('pointerup', (e) => {
+        if (Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 6) return;
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const allInstanced = Array.from(instancedMeshMap.values());
+        const hits = raycaster.intersectObjects(allInstanced, false);
+
+        if (hits.length > 0) {
+          const hit = hits[0];
+          const part = instancedParts.find(p => p.mesh === hit.object && p.instancedIndex === hit.instanceId);
+          if (part && nodeMetadata.has(part.nodeId)) {
+            selectEntity('node', part.nodeId);
+            return;
+          }
+        }
+
+        const islHits = raycaster.intersectObjects(islandGroup.children, true);
+        if (islHits.length > 0) {
+          let curr = islHits[0].object;
+          while (curr.parent && curr.parent !== islandGroup) curr = curr.parent;
+          let closestIsl = null, minD = 99;
+          DATA.islands.forEach(isl => {
+            const d = isl.worldPos.distanceTo(curr.position);
+            if (d < minD) { minD = d; closestIsl = isl; }
+          });
+          if (closestIsl && minD < 1.0) selectEntity('island', closestIsl.id);
+        }
+      });
+
+      /* 側欄與按鈕互動 */
+      const navContent = document.getElementById('nav-list-content');
+      const tabIslandsBtn = document.getElementById('tab-islands-btn');
+      const tabFlowsBtn = document.getElementById('tab-flows-btn');
+      let currentTab = 'islands';
+
+      function renderNavList(filter = '') {
+        navContent.innerHTML = '';
+        const kw = filter.trim().toLowerCase();
+
+        if (currentTab === 'islands') {
+          DATA.islands.forEach(isl => {
+            const matchedNodes = isl.nodes.filter(n => n.name.toLowerCase().includes(kw) || n.desc.toLowerCase().includes(kw));
+            if (!kw || isl.name.toLowerCase().includes(kw) || matchedNodes.length > 0) {
+              const details = document.createElement('details');
+              details.className = 'nav-island-details';
+              details.open = !!kw;
+              const summary = document.createElement('summary');
+              summary.className = 'nav-island-summary';
+              summary.innerHTML = `<span><b>${isl.code}</b> ${isl.name}</span> <span style="font-size:11px;color:var(--tech-blue)">${isl.nodes.length} 個</span>`;
+              summary.onclick = (e) => {
+                if (e.target === summary || e.target.parentElement === summary) selectEntity('island', isl.id);
+              };
+              details.appendChild(summary);
+
+              isl.nodes.forEach(n => {
+                if (!kw || n.name.toLowerCase().includes(kw) || n.desc.toLowerCase().includes(kw)) {
+                  const row = document.createElement('div');
+                  row.className = 'nav-subnode';
+                  row.innerHTML = `<span>${n.name}</span><span style="font-size:10px;color:var(--neon-green)">● ${n.status}</span>`;
+                  row.onclick = () => selectEntity('node', n.id);
+                  details.appendChild(row);
+                }
+              });
+              navContent.appendChild(details);
+            }
+          });
+        } else {
+          DATA.dataFlows.forEach(fl => {
+            const fName = islandMap.get(fl.from).name;
+            const tName = islandMap.get(fl.to).name;
+            if (!kw || fl.cargo.includes(kw) || fName.includes(kw) || tName.includes(kw)) {
+              const row = document.createElement('div');
+              row.className = 'nav-island-details';
+              row.style.padding = '9px 12px';
+              row.style.cursor = 'pointer';
+              row.innerHTML = `
+                <div style="font-weight:700; display:flex; justify-content:space-between;">
+                  <span>${fName} → ${tName}</span>
+                  <span style="color:var(--coral); font-size:11px;">[${fl.cargo}]</span>
+                </div>
+                <div style="font-size:11.5px; color:var(--ink-soft); margin-top:3px;">${fl.desc}</div>
+              `;
+              row.onclick = () => selectEntity('flow', fl.id);
+              navContent.appendChild(row);
+            }
+          });
+        }
+      }
+
+      tabIslandsBtn.onclick = () => {
+        currentTab = 'islands';
+        tabIslandsBtn.classList.add('active');
+        tabFlowsBtn.classList.remove('active');
+        renderNavList(document.getElementById('search-input').value);
+      };
+      tabFlowsBtn.onclick = () => {
+        currentTab = 'flows';
+        tabFlowsBtn.classList.add('active');
+        tabIslandsBtn.classList.remove('active');
+        renderNavList(document.getElementById('search-input').value);
+      };
+      document.getElementById('search-input').oninput = (e) => renderNavList(e.target.value);
+      renderNavList();
+
+      document.querySelectorAll('.time-btn-group .hud-btn').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.time-btn-group .hud-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateDayNightCycle(parseInt(btn.dataset.time, 10));
+        };
+      });
+
+      const btnToggleFlow = document.getElementById('btn-toggle-flow');
+      let flowVisible = true;
+      btnToggleFlow.onclick = () => {
+        flowVisible = !flowVisible;
+        btnToggleFlow.classList.toggle('active', flowVisible);
+        flowTubes.forEach(t => t.mesh.visible = flowVisible);
+      };
+
+      const btnToggleBadges = document.getElementById('btn-toggle-badges');
+      let badgesVisible = true;
+      btnToggleBadges.onclick = () => {
+        badgesVisible = !badgesVisible;
+        btnToggleBadges.classList.toggle('active', badgesVisible);
+        characters.forEach(c => c.bubbleElement.style.display = badgesVisible ? 'block' : 'none');
+      };
+
+      document.getElementById('btn-toggle-birds').onclick = () => flyTo(controls.target.clone(), new THREE.Vector3(0.01, 38, 4.5));
+      document.getElementById('btn-reset-cam').onclick = () => resetCameraOverview();
+
+      /* 模擬事件輪播 */
+      const logEl = document.getElementById('log-text');
+      const logEvents = [
+        "交易主機 A 軌: 核心批次結算完成, 0 錯誤",
+        "K8s 控制平面: Pod 水平擴展 +4 實例回應尖峰",
+        "統一身分驗證: 攔截 12 次異常暴力登入嘗試",
+        "開放金融 API: 呼叫延遲降低至 8ms (快取命中)",
+        "資安維運 (SOC): 阻斷外部弱點探測封包",
+        "冷資料封存: 每日帳務不可竄改存證上封"
+      ];
+      let logIndex = 0;
+      setInterval(() => {
+        logIndex = (logIndex + 1) % logEvents.length;
+        logEl.innerText = `EVENT: ${logEvents[logIndex]}`;
+      }, 4200);
+
+      /* 動畫輪播與視窗自適應 */
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+        const time = clock.getElapsedTime();
+
+        currentDayMinutes = (currentDayMinutes + delta * 10) % 1440;
+        updateDayNightCycle(currentDayMinutes);
+
+        waterMat.uniforms.uTime.value = time;
+        flowTubes.forEach(t => t.mat.uniforms.uTime.value = time);
+
+        characters.forEach(char => {
+          if (char.forward) {
+            char.t += char.speed * delta;
+            if (char.t >= 1) { char.t = 1; char.forward = false; }
+          } else {
+            char.t -= char.speed * delta;
+            if (char.t <= 0) { char.t = 0; char.forward = true; }
+          }
+          const pt = char.curve.getPointAt(char.t);
+          char.group.position.copy(pt);
+          const tgt = char.curve.getTangentAt(char.t);
+          if (!char.forward) tgt.negate();
+          char.group.rotation.y = Math.atan2(tgt.x, tgt.z);
+        });
+
+        if (isFlying) {
+          const progress = Math.min((performance.now() - flightStart) / flightDuration, 1);
+          const ease = easeInOutCubic(progress);
+          camera.position.lerpVectors(camStartPos, camEndPos, ease);
+          controls.target.lerpVectors(targetStart, targetEnd, ease);
+          if (progress >= 1) isFlying = false;
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
+      }
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // 初始化完成，淡出載入畫面
+      updateDayNightCycle(540);
+      animate();
+      const loader = document.getElementById('loader-overlay');
+      loader.style.opacity = '0';
+      setTimeout(() => loader.style.display = 'none', 500);
+    }
+
+    try {
+      initApp();
+    } catch (err) {
+      console.error(err);
+      const msg = document.getElementById('loader-msg');
+      if (msg) msg.innerHTML = `<span style="color:#d9534f;font-weight:bold;">初始化失敗: ${err.message}</span>`;
+    }
+  </script>
+</body>
+</html>
